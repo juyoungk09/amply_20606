@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import TextField from '../components/ui/TextField'
 import { api, type RecordingRow, type User } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 
 export default function MyPage() {
   const { user, loading, setUser, logout } = useAuth()
-  const navigate = useNavigate()
   const [myCount, setMyCount] = useState<number | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [withdrawn, setWithdrawn] = useState(false)
 
   // 내가 올린 녹음 수 (전체 목록에서 내 것만 센다)
   useEffect(() => {
@@ -19,8 +19,9 @@ export default function MyPage() {
       .catch(() => {})
   }, [user])
 
+  if (withdrawn) return <Navigate to="/" replace /> // 탈퇴하면 홈으로
   if (loading) return <p className="text-dim">불러오는 중…</p>
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace /> // 로그인 안 했으면 로그인 페이지로
 
   // [Update] PUT /api/users/me
   async function handleUpdate(e: FormEvent<HTMLFormElement>) {
@@ -53,8 +54,8 @@ export default function MyPage() {
     if (!window.confirm('정말 탈퇴할까요? 올린 녹음도 모두 삭제되고 되돌릴 수 없어요.')) return
     try {
       await api('/users/me', { method: 'DELETE' })
+      setWithdrawn(true)
       logout()
-      navigate('/')
     } catch (err) {
       setError((err as Error).message)
     }

@@ -11,7 +11,8 @@ const pool = mysql.createPool({
   port: process.env.DB_PORT,
   waitForConnections: true, // 연결이 다 차있을 때 대기할지 여부
   connectionLimit: 10,      // 최대 동시 연결 수
-  queueLimit: 0             // 대기 큐 제한 (0은 무제한)
+  queueLimit: 0,            // 대기 큐 제한 (0은 무제한)
+  timezone: 'Z'             // DB의 DATETIME을 UTC로 해석 (MySQL 서버 시간이 UTC라서 이게 없으면 9시간 어긋남)
 });
 
 try {
