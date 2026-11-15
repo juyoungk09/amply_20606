@@ -17,6 +17,12 @@ app.use('/api/recordings', recordingsRouter);
 
 // 라우트에서 처리하지 못한 에러는 여기로 모인다
 app.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ message: '파일은 50MB까지 올릴 수 있어요.' });
+  }
+  if (err.status === 400) {
+    return res.status(400).json({ message: '요청 형식이 올바르지 않아요.' }); // 깨진 JSON 등
+  }
   console.error(err);
   res.status(500).json({ message: '서버에서 문제가 생겼어요.' });
 });

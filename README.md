@@ -19,12 +19,12 @@
 
 | 구분 | 기술 |
 |---|---|
-| Front| Styling | Tailwind CSS |
- |
-| Styling | CSS |
+| Frontend | React + Vite + TypeScript |
+| Styling | Tailwind CSS |
 | Audio Processing | Web Audio API |
-| Visualization | Canvas API |
+| Visualization | wavesurfer.js (Canvas 기반 파형) |
 | Backend | Node.js + Express |
+| File Upload | multer |
 | Database | MySQL |
 | Authentication | JWT |
 | Password Encryption | bcrypt |
@@ -238,3 +238,150 @@ React Router를 사용하여 페이지를 구성하며, 로그인 여부에 따�
 | `/practice` | Practice | 메트로놈 및 튜너 | 로그인 |
 | `/practice/logs` | PracticeLogs | 연습 기록 및 통계 | 로그인 |
 | `/mypage` | MyPage | 프로필 수정 및 회원 탈퇴 | 로그인 |
+
+---
+
+## 7. 실행 방법
+
+### 7.1. 준비물
+
+- **Node.js** 20 이상 (개발 환경: v24)
+- **MySQL 8.0** + **MySQL Workbench**
+- 마이크 (녹음 기능 사용 시)
+
+### 7.2. 데이터베이스 만들기 (MySQL Workbench)
+
+1. MySQL Workbench를 열고 `Local instance MySQL80`에 접속한다.
+2. 상단 메뉴 **File → New Query Tab**으로 새 SQL 탭을 연다.
+3. 아래 SQL을 전부 붙여 넣고 ⚡(**Execute**) 버튼을 눌러 실행한다.
+4. 왼쪽 **SCHEMAS** 패널에서 새로고침(🔄)하면 `amply_20606` 아래에 `users`, `recordings` 테이블이 보인다.
+
+```sql
+-- 데이터베이스 생성
+CREATE DATABASE IF NOT EXISTS amply_20606 DEFAULT CHARACTER SET utf8mb4;
+USE amply_20606;
+
+-- 회원
+CREATE TABLE IF NOT EXISTS users (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  username   VARCHAR(30)  NOT NULL UNIQUE,  -- 로그인 아이디
+  password   VARCHAR(100) NOT NULL,         -- bcrypt 해시
+  nickname   VARCHAR(30)  NOT NULL,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 녹음 (핵심 데이터)
+CREATE TABLE IF NOT EXISTS recordings (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT          NOT NULL,         -- 작성자
+  title      VARCHAR(100) NOT NULL,
+  memo       TEXT,
+  file_path  VARCHAR(255) NOT NULL,         -- server/uploads 아래 저장된 파일 이름
+  duration   FLOAT,                         -- 길이(초)
+  bpm        INT,                           -- 추정 템포
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- 회원이 탈퇴하면 그 회원의 녹음도 함께 삭제
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+> 데이터베이스 이름을 바꾸고 싶으면 위 SQL의 `amply_20606` 두 곳과 `server/.env`의 `DB_NAME`을 같이 바꾼다.
+
+### 7.3. 서버 환경 변수 설정
+
+`server` 폴더에서 `.env.example`을 복사해 `.env`를 만든다.
+
+```powershell
+cd server
+Copy-Item .env.example .env
+```
+
+`.env`를 열어 값을 채운다. `DB_PASSWORD`는 Workbench에서 `Local instance`에 접속할 때 쓰는 root 비밀번호다.
+
+```env
+PORT=3000
+
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=여기에_MySQL_root_비밀번호
+DB_NAME=amply_20606
+
+# JWT 서명용 비밀 문자열 (아무 긴 문자열이나 입력)
+JWT_SECRET=amply-secret-key-change-me
+```
+
+### 7.4. 서버 실행 (터미널 1)
+
+```powershell
+cd server
+npm install
+npm run dev
+```
+
+아래 두 줄이 보이면 성공이다.
+
+```
+✅ MySQL 데이터베이스 연결 성공!
+🎸 Amply 서버 실행 중: http://localhost:3000
+```
+
+### 7.5. 클라이언트 실행 (터미널 2)
+
+```powershell
+cd client
+npm install
+npm run dev
+```
+
+브라우저에서 **http://localhost:5173** 에 접속한다.
+클라이언트의 `/api`, `/uploads` 요청은 Vite 설정(`client/vite.config.ts`)에 의해 3000번 서버로 자동 전달되므로 서버가 먼저 켜져 있어야 한다.
+
+### 7.6. 기능 확인 순서
+
+1. **회원가입** → 가입하면 자동으로 로그인되고 헤더에 닉네임이 표시된다.
+2. **녹음** 메뉴 → `녹음` 버튼으로 녹음 → `정지` → 오른쪽 플레이어 아래에서 제목·메모 입력 후 `저장`
+3. **피드** 메뉴 → 모든 사용자의 녹음 목록 (작성자 닉네임 = JOIN 결과), 본인 녹음만 `수정`·`삭제` 버튼 표시
+4. **마이페이지** → 닉네임·비밀번호 수정, 회원 탈퇴
+
+### 7.7. Workbench 확인용 SQL
+
+발표·검증할 때 Workbench에서 실행해 볼 수 있는 쿼리다.
+
+```sql
+USE amply_20606;
+
+-- 회원 목록 (password 컬럼이 $2b$로 시작하면 bcrypt로 암호화된 것)
+SELECT id, username, password, nickname, created_at FROM users;
+
+-- 녹음 목록
+SELECT * FROM recordings;
+
+-- [JOIN] 피드 메뉴와 같은 쿼리: 녹음 + 작성자 닉네임
+SELECT r.id, r.title, r.memo, r.duration, r.bpm, r.created_at, u.nickname
+FROM recordings r
+JOIN users u ON r.user_id = u.id
+ORDER BY r.created_at DESC;
+
+-- 회원별 녹음 수
+SELECT u.nickname, COUNT(r.id) AS recording_count
+FROM users u
+LEFT JOIN recordings r ON r.user_id = u.id
+GROUP BY u.id, u.nickname;
+```
+
+### 7.8. API 목록
+
+| 메서드 | 경로 | 설명 | 로그인 |
+|---|---|---|---|
+| POST | `/api/users/register` | 회원가입 (bcrypt 암호화) | |
+| POST | `/api/users/login` | 로그인, JWT 발급 | |
+| GET | `/api/users/me` | 내 프로필 조회 | 필요 |
+| PUT | `/api/users/me` | 닉네임·비밀번호 수정 | 필요 |
+| DELETE | `/api/users/me` | 회원 탈퇴 (녹음도 함께 삭제) | 필요 |
+| GET | `/api/recordings` | 전체 녹음 목록 (users JOIN) | |
+| POST | `/api/recordings` | 녹음 업로드 | 필요 |
+| PUT | `/api/recordings/:id` | 제목·메모 수정 | 본인만 |
+| DELETE | `/api/recordings/:id` | 녹음 삭제 | 본인만 |
+
+녹음 파일은 `server/uploads` 폴더에 저장된다.

@@ -44,9 +44,9 @@ export default function Register() {
       <AuthHeading title="회원가입" description="Amply와 함께 연습을 기록해 보세요." />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 md:gap-5">
-        <TextField label="아이디" name="username" autoComplete="username" required />
-        <TextField label="닉네임" name="nickname" autoComplete="nickname" required />
-        <TextField label="비밀번호" name="password" type="password" autoComplete="new-password" required />
+        <TextField label="아이디" name="username" autoComplete="username" required maxLength={30} />
+        <TextField label="닉네임" name="nickname" autoComplete="nickname" required maxLength={30} />
+        <TextField label="비밀번호" name="password" type="password" autoComplete="new-password" required maxLength={100} />
         <TextField
           label="비밀번호 확인"
           name="passwordConfirm"

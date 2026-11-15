@@ -7,15 +7,23 @@ import auth from '../middlewares/auth.js';
 
 const router = Router();
 
+// 비어 있지 않은 문자열이고 max 글자 이하인지 (DB 컬럼 길이를 넘지 않게)
+const isText = (value, max) => typeof value === 'string' && value.trim() !== '' && value.length <= max;
+
+// 오디오 확장자만 허용 (html 같은 파일이 그대로 열리지 않도록)
+const AUDIO_EXTS = ['.webm', '.ogg', '.m4a', '.mp3', '.wav'];
+
 // 업로드한 오디오 파일은 server/uploads 폴더에 "시간-랜덤숫자.확장자" 이름으로 저장
 const upload = multer({
   storage: multer.diskStorage({
     destination: 'uploads/',
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname) || '.webm';
-      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeExt = AUDIO_EXTS.includes(ext) ? ext : '.webm';
+      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`);
     },
   }),
+  fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('audio/')), // 오디오가 아니면 저장하지 않음
   limits: { fileSize: 50 * 1024 * 1024 }, // 최대 50MB
 });
 
@@ -42,24 +50,30 @@ router.get('/', async (req, res) => {
 
 // [Create] 녹음 업로드: 로그인한 사용자만
 router.post('/', auth, upload.single('audio'), async (req, res) => {
-  const { title, memo, duration, bpm } = req.body;
-  if (!req.file || !title) {
+  const { title, memo, duration, bpm } = req.body ?? {};
+  if (!req.file || !isText(title, 100)) {
     if (req.file) await fs.rm(req.file.path, { force: true }); // 이미 저장된 파일은 지운다
-    return res.status(400).json({ message: '오디오 파일과 제목이 필요해요.' });
+    return res.status(400).json({ message: '오디오 파일과 제목(100자 이내)이 필요해요.' });
   }
 
-  const [result] = await pool.query(
-    'INSERT INTO recordings (user_id, title, memo, file_path, duration, bpm) VALUES (?, ?, ?, ?, ?, ?)',
-    [req.user.id, title, memo || null, req.file.filename, duration || null, bpm || null],
-  );
-  res.status(201).json({ id: result.insertId });
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO recordings (user_id, title, memo, file_path, duration, bpm) VALUES (?, ?, ?, ?, ?, ?)',
+      // 숫자가 아니면 NaN → null로 저장
+      [req.user.id, title, memo || null, req.file.filename, Number(duration) || null, Math.round(Number(bpm)) || null],
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    await fs.rm(req.file.path, { force: true }); // DB 저장에 실패하면 파일도 지운다
+    throw err;
+  }
 });
 
 // [Update] 제목·메모 수정: 본인 녹음만
 router.put('/:id', auth, async (req, res) => {
-  const { title, memo } = req.body;
-  if (!title) {
-    return res.status(400).json({ message: '제목을 입력해 주세요.' });
+  const { title, memo } = req.body ?? {};
+  if (!isText(title, 100)) {
+    return res.status(400).json({ message: '제목은 100자 이내로 입력해 주세요.' });
   }
   if (!(await findOwnRecording(req.params.id, req.user.id))) {
     return res.status(403).json({ message: '본인이 올린 녹음만 수정할 수 있어요.' });

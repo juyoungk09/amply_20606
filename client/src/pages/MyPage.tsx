@@ -95,7 +95,7 @@ export default function MyPage() {
           <section className="panel p-6">
             <h2 className="mb-5 text-xl font-black">프로필 수정</h2>
             <form onSubmit={handleUpdate} className="flex flex-col gap-4">
-              <TextField label="닉네임" name="nickname" defaultValue={user.nickname} required key={user.nickname} />
+              <TextField label="닉네임" name="nickname" defaultValue={user.nickname} required maxLength={30} key={user.nickname} />
               <TextField
                 label="새 비밀번호 (바꿀 때만 입력)"
                 name="password"
